@@ -53,7 +53,24 @@ func (tm *TradeManager) listen() {
 		select {
 		case trade := <-tm.Trades:
 			tm.isDirty = true
-			if !trade.IsReturn {
+			if trade.IsReturn {
+				if trades, ok := tm.Lenders[trade.LenderID]; ok {
+					for i, t := range trades {
+						if t.Borrower == trade.Borrower && t.CardName == trade.CardName {
+							tm.Lenders[trade.LenderID] = append(trades[:i], trades[i+1:]...)
+							break
+						}
+					}
+				}
+				if trades, ok := tm.Borrowers[trade.Borrower]; ok {
+					for i, t := range trades {
+						if t.LenderID == trade.LenderID && t.CardName == trade.CardName {
+							tm.Borrowers[trade.Borrower] = append(trades[:i], trades[i+1:]...)
+							break
+						}
+					}
+				}
+			} else {
 				t := trade
 				tm.Lenders[t.LenderID] = append(tm.Lenders[t.LenderID], &t)
 				tm.Borrowers[t.Borrower] = append(tm.Borrowers[t.Borrower], &t)

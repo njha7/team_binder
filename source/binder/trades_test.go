@@ -204,23 +204,40 @@ func TestListenReturn(t *testing.T) {
 	}
 	defer tm.TradesFile.Close()
 
+	// Add a trade first
 	tm.Trades <- Trade{
 		LenderID: 789,
-		Borrower: 012,
+		Borrower: 12,
+		CardName: "Returned Card",
+	}
+
+	select {
+	case <-tm.Ticker:
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Verify trade was added
+	if len(tm.Lenders[789]) != 1 {
+		t.Fatalf("expected 1 trade for lender 789, got %d", len(tm.Lenders[789]))
+	}
+
+	// Now return it
+	tm.Trades <- Trade{
+		LenderID: 789,
+		Borrower: 12,
 		CardName: "Returned Card",
 		IsReturn: true,
 	}
 
-	// Give the goroutine time to process
 	select {
 	case <-tm.Ticker:
 	case <-time.After(100 * time.Millisecond):
 	}
 
 	if len(tm.Lenders[789]) != 0 {
-		t.Errorf("expected no trades for lender 789 on return, got %d", len(tm.Lenders[789]))
+		t.Errorf("expected 0 trades for lender 789 after return, got %d", len(tm.Lenders[789]))
 	}
-	if len(tm.Borrowers[012]) != 0 {
-		t.Errorf("expected no trades for borrower 12 on return, got %d", len(tm.Borrowers[012]))
+	if len(tm.Borrowers[12]) != 0 {
+		t.Errorf("expected 0 trades for borrower 12 after return, got %d", len(tm.Borrowers[12]))
 	}
 }
