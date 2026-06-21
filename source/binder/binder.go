@@ -161,11 +161,72 @@ func handleLend(s *discordgo.Session, i *discordgo.InteractionCreate, tm *TradeM
 }
 
 func handleBorrow(s *discordgo.Session, i *discordgo.InteractionCreate, tm *TradeManager) {
-	_ = tm // implement /borrow logic here
+	options := i.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+
+	userOpt := optionMap["user"]
+	cardOpt := optionMap["card"]
+
+	var quantity int64 = 1
+	quantityOpt, ok := optionMap["quantity"]
+	if ok {
+		quantity = quantityOpt.IntValue()
+	}
+
+	lenderUser := userOpt.UserValue(s)
+	cardName := cardOpt.StringValue()
+
+	borrowerID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
+	lenderID, _ := strconv.ParseInt(lenderUser.ID, 10, 64)
+
+	tm.Trades <- Trade{
+		LenderID: lenderID,
+		Borrower: borrowerID,
+		CardName: cardName,
+		Quantity: quantity,
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("<@%s> has lent <@%s> %d %s", i.Member.User.ID, lenderUser.ID, quantity, cardName),
+		},
+	})
 }
 
 func handleReturn(s *discordgo.Session, i *discordgo.InteractionCreate, tm *TradeManager) {
-	_ = tm // implement /return logic here
+	options := i.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+
+	userOpt := optionMap["user"]
+	cardOpt := optionMap["card"]
+
+	lenderUser := userOpt.UserValue(s)
+	cardName := cardOpt.StringValue()
+
+	borrowerID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
+	lenderID, _ := strconv.ParseInt(lenderUser.ID, 10, 64)
+
+	tm.Trades <- Trade{
+		LenderID: lenderID,
+		Borrower: borrowerID,
+		CardName: cardName,
+		Quantity: 0,
+		IsReturn: true,
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("<@%s> has returned %s to  <@%s>", i.Member.User.ID, cardName, lenderUser.ID),
+		},
+	})
 }
 
 func main() {
