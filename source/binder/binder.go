@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -39,15 +41,70 @@ func commands(_ *discordgo.Session) []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
 			Name:        "lend",
-			Description: "Lend an item to another user",
+			Description: "Lend an card to another user",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "User to lend the card to",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "card",
+					Description: "Name of the card to lend",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "quantity",
+					Description: "Number of copies lent",
+					Required:    false,
+				},
+			},
 		},
 		{
 			Name:        "borrow",
-			Description: "Borrow an item from another user",
+			Description: "Borrow an card from another user",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "User to borrow the card from",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "card",
+					Description: "Name of the card to borrow",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "quantity",
+					Description: "Number of copies borrowed",
+					Required:    false,
+				},
+			},
 		},
 		{
 			Name:        "return",
-			Description: "Return a borrowed item",
+			Description: "Return a borrowed card",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "User to return the card to",
+					Required:    true,
+				},
+				{
+					Type:         discordgo.ApplicationCommandOptionString,
+					Name:         "card",
+					Description:  "Name of the borrowed card",
+					Required:     true,
+					Autocomplete: true,
+				},
+			},
 		},
 	}
 }
@@ -67,7 +124,40 @@ func interactionHandler(s *discordgo.Session, tm *TradeManager) func(*discordgo.
 }
 
 func handleLend(s *discordgo.Session, i *discordgo.InteractionCreate, tm *TradeManager) {
-	_ = tm // implement /lend logic here
+	options := i.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+
+	userOpt := optionMap["user"]
+	cardOpt := optionMap["card"]
+
+	var quantity int64 = 1
+	quantityOpt, ok := optionMap["quantity"]
+	if ok {
+		quantity = quantityOpt.IntValue()
+	}
+
+	borrowerUser := userOpt.UserValue(s)
+	cardName := cardOpt.StringValue()
+
+	lenderID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
+	borrowerID, _ := strconv.ParseInt(borrowerUser.ID, 10, 64)
+
+	tm.Trades <- Trade{
+		LenderID: lenderID,
+		Borrower: borrowerID,
+		CardName: cardName,
+		Quantity: quantity,
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("<@%s> has lent <@%s> %d %s", i.Member.User.ID, borrowerUser.ID, quantity, cardName),
+		},
+	})
 }
 
 func handleBorrow(s *discordgo.Session, i *discordgo.InteractionCreate, tm *TradeManager) {

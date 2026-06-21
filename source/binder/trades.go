@@ -11,6 +11,7 @@ type Trade struct {
 	LenderID int64
 	Borrower int64
 	CardName string
+	Quantity int64
 	IsReturn bool
 }
 
