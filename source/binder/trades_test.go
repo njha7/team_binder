@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestParseTrades(t *testing.T) {
@@ -152,5 +153,74 @@ func TestSaveTrades(t *testing.T) {
 
 	if len(tm2.Lenders) != 1 || len(tm2.Lenders[100]) != 2 {
 		t.Errorf("expected 1 lender with 2 cards, got %v", tm2.Lenders)
+	}
+}
+
+func TestListenTrade(t *testing.T) {
+	tmp, err := os.CreateTemp("", "listen_trades_*.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmp.Name())
+	tmp.Close()
+
+	tm, err := NewTradeManager(tmp.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.TradesFile.Close()
+
+	tm.Trades <- Trade{
+		LenderID: 123,
+		Borrower: 456,
+		CardName: "New Card",
+	}
+
+	// Give the goroutine time to process
+	select {
+	case <-tm.Ticker:
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	if len(tm.Lenders[123]) != 1 {
+		t.Errorf("expected 1 trade for lender 123, got %d", len(tm.Lenders[123]))
+	}
+	if len(tm.Borrowers[456]) != 1 {
+		t.Errorf("expected 1 trade for borrower 456, got %d", len(tm.Borrowers[456]))
+	}
+}
+
+func TestListenReturn(t *testing.T) {
+	tmp, err := os.CreateTemp("", "listen_return_*.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmp.Name())
+	tmp.Close()
+
+	tm, err := NewTradeManager(tmp.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.TradesFile.Close()
+
+	tm.Trades <- Trade{
+		LenderID: 789,
+		Borrower: 012,
+		CardName: "Returned Card",
+		IsReturn: true,
+	}
+
+	// Give the goroutine time to process
+	select {
+	case <-tm.Ticker:
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	if len(tm.Lenders[789]) != 0 {
+		t.Errorf("expected no trades for lender 789 on return, got %d", len(tm.Lenders[789]))
+	}
+	if len(tm.Borrowers[012]) != 0 {
+		t.Errorf("expected no trades for borrower 12 on return, got %d", len(tm.Borrowers[012]))
 	}
 }

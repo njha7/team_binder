@@ -51,7 +51,13 @@ func NewTradeManager(path string) (*TradeManager, error) {
 func (tm *TradeManager) listen() {
 	for {
 		select {
-		case <-tm.Trades:
+		case trade := <-tm.Trades:
+			tm.isDirty = true
+			if !trade.IsReturn {
+				t := trade
+				tm.Lenders[t.LenderID] = append(tm.Lenders[t.LenderID], &t)
+				tm.Borrowers[t.Borrower] = append(tm.Borrowers[t.Borrower], &t)
+			}
 		case <-tm.Ticker:
 			if tm.isDirty {
 				tm.saveTrades()
