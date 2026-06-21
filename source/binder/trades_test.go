@@ -19,6 +19,12 @@ func TestParseTrades(t *testing.T) {
 		444444444: {"Shadow Cloak"},
 	}
 
+	expectedLenderQuantities := map[int64]map[string]int64{
+		123456789: {"Fire Staff": 2, "Lightning Rod": 5},
+		111111111: {"Ice Wand": 1},
+		444444444: {"Shadow Cloak": 3},
+	}
+
 	expectedBorrowers := map[int64][]string{
 		987654321: {"Fire Staff"},
 		222222222: {"Ice Wand"},
@@ -36,16 +42,14 @@ func TestParseTrades(t *testing.T) {
 			t.Errorf("lender %d: expected %d trades, got %d", id, len(wantCards), len(got))
 			continue
 		}
-		for _, want := range wantCards {
-			found := false
-			for _, trade := range got {
-				if trade.CardName == want {
-					found = true
-					break
-				}
+		for _, trade := range got {
+			expectedQty, ok := expectedLenderQuantities[id][trade.CardName]
+			if !ok {
+				t.Errorf("lender %d: no expected quantity for card %q", id, trade.CardName)
+				continue
 			}
-			if !found {
-				t.Errorf("lender %d: missing card %q", id, want)
+			if trade.Quantity != expectedQty {
+				t.Errorf("lender %d, card %q: expected quantity %d, got %d", id, trade.CardName, expectedQty, trade.Quantity)
 			}
 		}
 	}

@@ -109,10 +109,18 @@ func (tm *TradeManager) parseTrades() error {
 			continue
 		}
 
+		quantity := int64(1)
+		if len(record) >= 4 {
+			if q, err := strconv.ParseInt(record[3], 10, 64); err == nil {
+				quantity = q
+			}
+		}
+
 		trade := &Trade{
 			LenderID: lender,
 			Borrower: borrower,
 			CardName: cardName,
+			Quantity: quantity,
 		}
 
 		tm.Lenders[lender] = append(tm.Lenders[lender], trade)
@@ -134,6 +142,7 @@ func (tm *TradeManager) saveTrades() error {
 				strconv.FormatInt(trade.LenderID, 10),
 				trade.CardName,
 				strconv.FormatInt(trade.Borrower, 10),
+				strconv.FormatInt(trade.Quantity, 10),
 			})
 		}
 	}
