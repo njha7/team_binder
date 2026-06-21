@@ -1,0 +1,38 @@
+services:
+  dev:
+    build: .
+    container_name: ahab_dev
+    entrypoint: /bin/bash
+    user: "${HOST_UID}:${HOST_GID}"
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./:/home/devuser/workspace
+      - ~/.gitconfig:/home/devuser/.gitconfig:ro
+    working_dir: /home/devuser/workspace
+  ollama:
+    profiles:
+      - vibecode
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_KEEP_ALIVE=3600
+    ports:
+      - 11434:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ollama:/root/.ollama
+      - ./.opencode/opencode.json:/root/.config/opencode/
+    container_name: ollama
+    tty: true
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama: {}
