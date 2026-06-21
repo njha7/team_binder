@@ -1,11 +1,26 @@
 package main
 
-import "os"
+import (
+	"encoding/csv"
+	"os"
+	"strconv"
+	"time"
+)
+
+type Trade struct {
+	LenderID int64
+	Borrower int64
+	CardName string
+	IsReturn bool
+}
 
 type TradeManager struct {
-	Lenders   map[int64][]string
-	Borrowers map[int64][]string
+	Lenders    map[int64][]*Trade
+	Borrowers  map[int64][]*Trade
 	TradesFile *os.File
+	Trades     chan Trade
+	Ticker     <-chan time.Time
+	isDirty    bool
 }
 
 func NewTradeManager(path string) (*TradeManager, error) {
@@ -14,9 +29,93 @@ func NewTradeManager(path string) (*TradeManager, error) {
 		return nil, err
 	}
 
-	return &TradeManager{
-		Lenders:    make(map[int64][]string),
-		Borrowers:  make(map[int64][]string),
+	tm := &TradeManager{
+		Lenders:    make(map[int64][]*Trade),
+		Borrowers:  make(map[int64][]*Trade),
 		TradesFile: f,
-	}, nil
+		Trades:     make(chan Trade, 100),
+		Ticker:     time.NewTicker(5 * time.Minute).C,
+		isDirty:    false,
+	}
+
+	if err := tm.parseTrades(); err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	go tm.listen()
+
+	return tm, nil
+}
+
+func (tm *TradeManager) listen() {
+	for {
+		select {
+		case <-tm.Trades:
+		case <-tm.Ticker:
+			if tm.isDirty {
+				tm.saveTrades()
+			}
+		}
+	}
+}
+
+func (tm *TradeManager) parseTrades() error {
+	reader := csv.NewReader(tm.TradesFile)
+	reader.FieldsPerRecord = -1
+	records, err := reader.ReadAll()
+	if err != nil {
+		return err
+	}
+
+	for _, record := range records {
+		if len(record) < 3 {
+			continue
+		}
+
+		lender, err := strconv.ParseInt(record[0], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		cardName := record[1]
+
+		borrower, err := strconv.ParseInt(record[2], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		trade := &Trade{
+			LenderID: lender,
+			Borrower: borrower,
+			CardName: cardName,
+		}
+
+		tm.Lenders[lender] = append(tm.Lenders[lender], trade)
+		tm.Borrowers[borrower] = append(tm.Borrowers[borrower], trade)
+	}
+
+	return nil
+}
+
+func (tm *TradeManager) saveTrades() error {
+	tm.TradesFile.Truncate(0)
+	tm.TradesFile.Seek(0, 0)
+
+	writer := csv.NewWriter(tm.TradesFile)
+
+	for _, trades := range tm.Lenders {
+		for _, trade := range trades {
+			_ = writer.Write([]string{
+				strconv.FormatInt(trade.LenderID, 10),
+				trade.CardName,
+				strconv.FormatInt(trade.Borrower, 10),
+			})
+		}
+	}
+
+	writer.Flush()
+	tm.isDirty = false
+
+	return writer.Error()
 }
